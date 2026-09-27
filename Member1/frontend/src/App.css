@@ -1,0 +1,109 @@
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #07111f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 30px;
+  text-align: center;
+}
+
+h1 {
+  color: #00ff88;
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.app > p {
+  color: #9ca3af;
+}
+
+.camera-box {
+  position: relative;
+  width: 640px;
+  max-width: 100%;
+  margin: 30px auto 20px;
+  background: #111e30;
+  border: 2px solid #00ff88;
+  border-radius: 16px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+}
+
+.camera-box video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  background: #111e30;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+button {
+  padding: 14px 25px;
+  border: none;
+  border-radius: 8px;
+  background: #00cc80;
+  color: #07111f;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #00ff88;
+}
+
+.status {
+  color: #00ff88;
+  margin-top: 20px;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 15px;
+  }
+
+  h1 {
+    font-size: 27px;
+  }
+}
+
+.face-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+.fps-counter {
+  color: #00f5a0;
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 8px;
+}
