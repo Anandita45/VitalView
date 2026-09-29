@@ -1,3 +1,6 @@
+import threading
+import json
+import websocket # Connects to Member 2's server
 import os
 # Silence MediaPipe/TensorFlow C++ backend warnings for a clean terminal
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
@@ -23,26 +26,24 @@ def apply_bandpass_filter(data, fs):
     b, a = butter_bandpass(0.75, 3.0, fs, order=3)
     return filtfilt(b, a, data)
 
-# --- NEW: SKIN-PIXEL ISOLATION ---
+# --- SKIN-PIXEL ISOLATION (UPDATED FOR LOW LIGHT) ---
 def get_skin_average(roi):
-    """
-    Isolates skin capillaries from background/hair using YCrCb color space 
-    and returns the Green channel spatial average.
-    """
     if roi.size == 0:
         return 0
         
     ycrcb_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2YCrCb)
-    # Define medical skin color boundaries
     lower_skin = np.array([80, 85, 135], dtype=np.uint8)
     upper_skin = np.array([255, 135, 180], dtype=np.uint8)
     
-    # Create a binary mask keeping only skin pixels
     skin_mask = cv2.inRange(ycrcb_roi, lower_skin, upper_skin)
-    
-    # Calculate the spatial average of ONLY the isolated skin pixels
     mean_val = cv2.mean(roi, mask=skin_mask)
-    return mean_val[1] # Return the Green channel [1]
+    
+    # NEW FIX: If the mask is totally empty due to low light, 
+    # fallback to the raw Green channel so the signal doesn't flatline at 0!
+    if mean_val[0] == 0 and mean_val[1] == 0 and mean_val[2] == 0:
+        mean_val = cv2.mean(roi)
+        
+    return mean_val[1]
 
 # --- HUD DRAWING TOOL ---
 def draw_smart_target(img, x, y, size, color, thickness=2, length=8):
@@ -91,6 +92,36 @@ def start_vitals_stream():
     # --- NEW: MOTION TRACKING VARIABLES ---
     prev_nose_x, prev_nose_y = None, None
     MOTION_TOLERANCE = 5.0 
+
+    # --- NEW UNIQUE FEATURE: ASYNC BACKGROUND THREADING ---
+    # This dictionary acts as a bridge between Brain 1 and Brain 2
+    shared_payload = {
+        "bpm": 0, "motion": False, "calibrated": False, 
+        "r": 0.0, "g": 0.0, "b": 0.0, "running": True
+    }
+
+    def network_worker():
+        ws = websocket.WebSocket()
+        try:
+            ws.connect("ws://localhost:8000/ws/vitals")
+            print("SUCCESS: Linked to Liveness AI (Background Thread Active!)")
+            while shared_payload["running"]:
+                payload = {
+                    "bpm": shared_payload["bpm"],
+                    "motion_artifact": shared_payload["motion"],
+                    "calibrated": shared_payload["calibrated"],
+                    "r": shared_payload["r"],
+                    "g": shared_payload["g"],
+                    "b": shared_payload["b"]
+                }
+                ws.send(json.dumps(payload))
+                time.sleep(0.5) # Send data twice a second safely in the background
+        except Exception:
+            print("Network Thread: Server disconnected or offline.")
+
+    # Start Brain 2 in the background right before the camera turns on!
+    threading.Thread(target=network_worker, daemon=True).start()
+
     
     while True:
         success, frame = cap.read()
@@ -206,7 +237,8 @@ def start_vitals_stream():
                                 
                         bpm_history.append(raw_bpm)
                         
-                        if len(bpm_history) > 15: 
+                        # CHANGED from 15 to 90 to create a 3-second stable average
+                        if len(bpm_history) > 90: 
                             bpm_history.pop(0)
                         
                     if len(bpm_history) > 0:
@@ -319,10 +351,28 @@ def start_vitals_stream():
                 x2, y2 = int(start_x + i * x_step), int(start_y - (y2_ratio * graph_h))
                 
                 cv2.line(frame, (x1, y1), (x2, y2), line_color, 2)
+      
+        # --- UPDATE BACKGROUND THREAD (NO NETWORK LAG!) ---
+        try:
+            if forehead_patch.size > 0:
+                mean_b, mean_g, mean_r, _ = cv2.mean(forehead_patch)
+            else:
+                mean_b, mean_g, mean_r = 0, 0, 0
+        except NameError:
+            # If no face is detected yet, just send zeros
+            mean_b, mean_g, mean_r = 0, 0, 0
+            
+        shared_payload["bpm"] = display_bpm
+        shared_payload["motion"] = motion_artifact
+        shared_payload["calibrated"] = (len(forehead_data) >= 450)
+        shared_payload["r"] = mean_r
+        shared_payload["g"] = mean_g
+        shared_payload["b"] = mean_b
 
         # --- CONVEYOR BELT ---
         yield frame, display_bpm
-
+    # When the while loop breaks (camera shuts off), kill the background thread safely!
+    shared_payload["running"] = False
     cap.release()
 
 if __name__ == "__main__":
