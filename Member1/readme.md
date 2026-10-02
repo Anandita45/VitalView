@@ -13,11 +13,18 @@ pip install -r Member1/requirements.txt
 
 ### 💻 Single-Command Launch
 
-To boot the entire system, navigate to the root `VitalView` directory in your terminal and run the master orchestrator script:
+## 🚀 How to Run the System (Clean Execution)
 
-```bash
-python run_system.py
-```
+Due to the underlying C++ backend of Google's MediaPipe and TensorFlow, the system may generate harmless but visually messy terminal warnings (e.g., `NORM_RECT` or `absl::InitializeLog`) during facial landmark processing. 
+
+To ensure a clean terminal output for presentation and debugging, launch the system while redirecting the error stream to null.
+
+**For Windows (PowerShell):**
+```powershell
+python run_system.py 2> $null
+
+**For Mac/Linux:**
+```python run_system.py 2> /dev/null
 
 **What this command does automatically:**
 
